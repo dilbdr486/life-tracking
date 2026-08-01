@@ -1,0 +1,110 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  --background: #f3f7f8;
+  --foreground: #12202a;
+  --surface: #ffffff;
+  --surface-2: #e8f0f2;
+  --border: #d5e1e6;
+  --muted: #5b6f7a;
+  --muted-2: #8aa0ab;
+  --accent: #0f766e;
+  --accent-hover: #0d9488;
+  --shadow: 0 10px 30px rgba(18, 32, 42, 0.06);
+  --font-sans: var(--font-jakarta);
+  --font-display: var(--font-fraunces);
+}
+
+.dark {
+  --background: #0b1419;
+  --foreground: #e8f1f4;
+  --surface: #122028;
+  --surface-2: #1a2c36;
+  --border: #243844;
+  --muted: #9db0ba;
+  --muted-2: #6f8793;
+  --accent: #2dd4bf;
+  --accent-hover: #5eead4;
+  --shadow: 0 12px 36px rgba(0, 0, 0, 0.35);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-jakarta);
+  --font-display: var(--font-fraunces);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-jakarta), sans-serif;
+  min-height: 100vh;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: -1;
+  background:
+    radial-gradient(circle at 12% 18%, rgba(15, 118, 110, 0.12), transparent 34%),
+    radial-gradient(circle at 88% 10%, rgba(14, 165, 233, 0.1), transparent 30%),
+    radial-gradient(circle at 70% 85%, rgba(45, 212, 191, 0.08), transparent 35%);
+}
+
+.dark body::before {
+  background:
+    radial-gradient(circle at 12% 18%, rgba(45, 212, 191, 0.12), transparent 34%),
+    radial-gradient(circle at 88% 10%, rgba(56, 189, 248, 0.1), transparent 30%),
+    radial-gradient(circle at 70% 85%, rgba(15, 118, 110, 0.14), transparent 35%);
+}
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fade-soft {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.animate-rise {
+  animation: rise-in 0.55s ease both;
+}
+
+.animate-fade {
+  animation: fade-soft 0.7s ease both;
+}
+
+.stagger-1 {
+  animation-delay: 0.08s;
+}
+.stagger-2 {
+  animation-delay: 0.16s;
+}
+.stagger-3 {
+  animation-delay: 0.24s;
+}
