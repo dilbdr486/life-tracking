@@ -17,8 +17,13 @@ import {
 } from "recharts";
 import { ACTIVITY_COLORS, EXPENSE_COLORS } from "@/lib/constants";
 import { Card, CardHeader } from "@/components/ui/card";
+import { formatCurrency } from "@/lib/utils";
 
 type Slice = { name: string; value: number };
+
+function currencyTooltipValue(value: number | undefined) {
+  return formatCurrency(Number(value ?? 0));
+}
 
 export function ReportCharts({
   expenseByCategory,
@@ -56,7 +61,7 @@ export function ReportCharts({
                   />
                 ))}
               </Pie>
-              <Tooltip />
+              <Tooltip formatter={currencyTooltipValue} />
               <Legend />
             </PieChart>
           </ResponsiveContainer>
@@ -104,7 +109,7 @@ export function ReportCharts({
               <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
               <XAxis dataKey="name" tick={{ fontSize: 11 }} />
               <YAxis tick={{ fontSize: 11 }} />
-              <Tooltip />
+              <Tooltip formatter={currencyTooltipValue} />
               <Bar dataKey="value" fill="#0d9488" radius={[6, 6, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
@@ -146,7 +151,7 @@ export function ReportCharts({
               <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
               <XAxis dataKey="name" tick={{ fontSize: 11 }} />
               <YAxis tick={{ fontSize: 11 }} />
-              <Tooltip />
+              <Tooltip formatter={currencyTooltipValue} />
               <Line
                 type="monotone"
                 dataKey="value"

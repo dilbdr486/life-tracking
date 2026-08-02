@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { connectDB } from "@/lib/db";
 import { EXPENSE_CATEGORIES } from "@/lib/constants";
 import { requireUser } from "@/lib/session";
+import { formatCurrency } from "@/lib/utils";
 import { budgetSchema } from "@/lib/validations";
 import { Budget, CategoryBudget, Notification } from "@/models";
 
@@ -61,7 +62,7 @@ export async function saveBudget(
   await Notification.create({
     userId: user.id,
     title: "Budget updated",
-    message: `Monthly budget set to $${parsed.data.monthlyBudget.toFixed(2)}. Savings goal: $${parsed.data.savingsGoal.toFixed(2)}.`,
+    message: `Monthly budget set to ${formatCurrency(parsed.data.monthlyBudget)}. Savings goal: ${formatCurrency(parsed.data.savingsGoal)}.`,
     type: "info",
   });
 

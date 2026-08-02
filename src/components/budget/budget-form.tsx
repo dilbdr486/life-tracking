@@ -46,7 +46,8 @@ export function BudgetForm({
               step="0.01"
               min="0"
               label="Monthly income"
-              defaultValue={monthlyIncome}
+              placeholder="0"
+              defaultValue={monthlyIncome || ""}
             />
             <Input
               name="monthlyBudget"
@@ -54,7 +55,8 @@ export function BudgetForm({
               step="0.01"
               min="0"
               label="Monthly budget"
-              defaultValue={monthlyBudget}
+              placeholder="0"
+              defaultValue={monthlyBudget || ""}
             />
             <Input
               name="savingsGoal"
@@ -62,7 +64,8 @@ export function BudgetForm({
               step="0.01"
               min="0"
               label="Savings goal"
-              defaultValue={savingsGoal}
+              placeholder="0"
+              defaultValue={savingsGoal || ""}
             />
           </div>
 
@@ -79,7 +82,8 @@ export function BudgetForm({
                   step="0.01"
                   min="0"
                   label={category}
-                  defaultValue={categoryBudgets[category] ?? 0}
+                  placeholder="0"
+                  defaultValue={categoryBudgets[category] || ""}
                 />
               ))}
             </div>

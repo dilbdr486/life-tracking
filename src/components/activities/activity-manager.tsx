@@ -1,6 +1,13 @@
 "use client";
 
-import { useActionState, useMemo, useState, useTransition } from "react";
+import {
+  useActionState,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useTransition,
+} from "react";
 import {
   createActivity,
   deleteActivity,
@@ -9,6 +16,7 @@ import {
 import { FormMessage } from "@/components/form-message";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader } from "@/components/ui/card";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
@@ -36,9 +44,18 @@ type Activity = {
   notes: string | null;
 };
 
+type ConfirmState =
+  | { type: "update" }
+  | { type: "delete"; activity: Activity }
+  | null;
+
 export function ActivityManager({ activities }: { activities: Activity[] }) {
   const [view, setView] = useState<"daily" | "weekly" | "monthly">("daily");
   const [editing, setEditing] = useState<Activity | null>(null);
+  const [confirm, setConfirm] = useState<ConfirmState>(null);
+  const formRef = useRef<HTMLFormElement>(null);
+  const skipUpdateConfirm = useRef(false);
+  const wasUpdatePending = useRef(false);
   const [createState, createAction, createPending] = useActionState(
     createActivity,
     {},
@@ -48,7 +65,14 @@ export function ActivityManager({ activities }: { activities: Activity[] }) {
     updateBound,
     {},
   );
-  const [, startTransition] = useTransition();
+  const [deletePending, startDeleteTransition] = useTransition();
+
+  useEffect(() => {
+    if (wasUpdatePending.current && !updatePending && updateState.success) {
+      setEditing(null);
+    }
+    wasUpdatePending.current = updatePending;
+  }, [updatePending, updateState.success]);
 
   const filtered = useMemo(() => {
     const now = new Date();
@@ -68,6 +92,32 @@ export function ActivityManager({ activities }: { activities: Activity[] }) {
     });
   }, [activities, view]);
 
+  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    if (editing && !skipUpdateConfirm.current) {
+      event.preventDefault();
+      setConfirm({ type: "update" });
+      return;
+    }
+  }
+
+  function handleConfirm() {
+    if (!confirm) return;
+
+    if (confirm.type === "update") {
+      skipUpdateConfirm.current = true;
+      setConfirm(null);
+      formRef.current?.requestSubmit();
+      skipUpdateConfirm.current = false;
+      return;
+    }
+
+    const id = confirm.activity.id;
+    startDeleteTransition(async () => {
+      await deleteActivity(id);
+      setConfirm(null);
+    });
+  }
+
   return (
     <div className="grid gap-6 xl:grid-cols-[360px_1fr]">
       <Card>
@@ -76,9 +126,11 @@ export function ActivityManager({ activities }: { activities: Activity[] }) {
           description="Duration is calculated automatically"
         />
         <form
+          ref={formRef}
           action={editing ? updateAction : createAction}
           className="space-y-3"
           key={editing?.id ?? "new"}
+          onSubmit={handleSubmit}
         >
           <Input
             name="title"
@@ -128,7 +180,11 @@ export function ActivityManager({ activities }: { activities: Activity[] }) {
           />
           <FormMessage
             error={editing ? updateState.error : createState.error}
-            success={editing ? updateState.success : createState.success}
+            success={
+              editing
+                ? updateState.success
+                : createState.success ?? updateState.success
+            }
           />
           <div className="flex gap-2">
             <Button type="submit" disabled={createPending || updatePending}>
@@ -215,9 +271,7 @@ export function ActivityManager({ activities }: { activities: Activity[] }) {
                     size="sm"
                     variant="danger"
                     onClick={() =>
-                      startTransition(async () => {
-                        await deleteActivity(item.id);
-                      })
+                      setConfirm({ type: "delete", activity: item })
                     }
                   >
                     <Trash2 className="h-3.5 w-3.5" />
@@ -229,6 +283,25 @@ export function ActivityManager({ activities }: { activities: Activity[] }) {
           )}
         </div>
       </Card>
+
+      <ConfirmDialog
+        open={confirm !== null}
+        title={
+          confirm?.type === "delete"
+            ? "Delete activity?"
+            : "Save activity changes?"
+        }
+        description={
+          confirm?.type === "delete"
+            ? `This will permanently delete “${confirm.activity.title}”. This action cannot be undone.`
+            : `Update “${editing?.title ?? "this activity"}” with the changes you made?`
+        }
+        confirmLabel={confirm?.type === "delete" ? "Delete" : "Save changes"}
+        variant={confirm?.type === "delete" ? "danger" : "primary"}
+        pending={confirm?.type === "delete" ? deletePending : updatePending}
+        onConfirm={handleConfirm}
+        onCancel={() => setConfirm(null)}
+      />
     </div>
   );
 }

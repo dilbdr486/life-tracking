@@ -4,6 +4,7 @@ import mongoose from "mongoose";
 import { revalidatePath } from "next/cache";
 import { connectDB } from "@/lib/db";
 import { requireUser } from "@/lib/session";
+import { formatCurrency } from "@/lib/utils";
 import { Activity, Budget, Expense, Notification } from "@/models";
 
 export async function markNotificationRead(id: string) {
@@ -94,7 +95,7 @@ export async function createDailyReminders() {
         Notification.create({
           userId: userObjectId,
           title: "Savings goal reminder",
-          message: `Estimated savings this month: $${savedEstimate.toFixed(2)} of $${budget.savingsGoal.toFixed(2)} goal.`,
+          message: `Estimated savings this month: ${formatCurrency(savedEstimate)} of ${formatCurrency(budget.savingsGoal)} goal.`,
           type: "goal",
         }),
       );

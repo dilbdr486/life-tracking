@@ -1,6 +1,13 @@
 "use client";
 
-import { useActionState, useMemo, useState, useTransition } from "react";
+import {
+  useActionState,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useTransition,
+} from "react";
 import {
   createExpense,
   deleteExpense,
@@ -9,6 +16,7 @@ import {
 import { FormMessage } from "@/components/form-message";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader } from "@/components/ui/card";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
@@ -26,10 +34,19 @@ type Expense = {
   date: string | Date;
 };
 
+type ConfirmState =
+  | { type: "update" }
+  | { type: "delete"; expense: Expense }
+  | null;
+
 export function ExpenseManager({ expenses }: { expenses: Expense[] }) {
   const [editing, setEditing] = useState<Expense | null>(null);
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("All");
+  const [confirm, setConfirm] = useState<ConfirmState>(null);
+  const formRef = useRef<HTMLFormElement>(null);
+  const skipUpdateConfirm = useRef(false);
+  const wasUpdatePending = useRef(false);
   const [createState, createAction, createPending] = useActionState(
     createExpense,
     {},
@@ -39,7 +56,14 @@ export function ExpenseManager({ expenses }: { expenses: Expense[] }) {
     updateBound,
     {},
   );
-  const [, startTransition] = useTransition();
+  const [deletePending, startDeleteTransition] = useTransition();
+
+  useEffect(() => {
+    if (wasUpdatePending.current && !updatePending && updateState.success) {
+      setEditing(null);
+    }
+    wasUpdatePending.current = updatePending;
+  }, [updatePending, updateState.success]);
 
   const filtered = useMemo(() => {
     return expenses.filter((item) => {
@@ -56,6 +80,32 @@ export function ExpenseManager({ expenses }: { expenses: Expense[] }) {
     });
   }, [expenses, search, category]);
 
+  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    if (editing && !skipUpdateConfirm.current) {
+      event.preventDefault();
+      setConfirm({ type: "update" });
+      return;
+    }
+  }
+
+  function handleConfirm() {
+    if (!confirm) return;
+
+    if (confirm.type === "update") {
+      skipUpdateConfirm.current = true;
+      setConfirm(null);
+      formRef.current?.requestSubmit();
+      skipUpdateConfirm.current = false;
+      return;
+    }
+
+    const id = confirm.expense.id;
+    startDeleteTransition(async () => {
+      await deleteExpense(id);
+      setConfirm(null);
+    });
+  }
+
   return (
     <div className="grid gap-6 xl:grid-cols-[360px_1fr]">
       <Card>
@@ -64,9 +114,11 @@ export function ExpenseManager({ expenses }: { expenses: Expense[] }) {
           description="Track every payment with category and method"
         />
         <form
+          ref={formRef}
           action={editing ? updateAction : createAction}
           className="space-y-3"
           key={editing?.id ?? "new"}
+          onSubmit={handleSubmit}
         >
           <Input
             name="amount"
@@ -109,7 +161,11 @@ export function ExpenseManager({ expenses }: { expenses: Expense[] }) {
           />
           <FormMessage
             error={editing ? updateState.error : createState.error}
-            success={editing ? updateState.success : createState.success}
+            success={
+              editing
+                ? updateState.success
+                : createState.success ?? updateState.success
+            }
           />
           <div className="flex gap-2">
             <Button type="submit" disabled={createPending || updatePending}>
@@ -193,9 +249,7 @@ export function ExpenseManager({ expenses }: { expenses: Expense[] }) {
                     size="sm"
                     variant="danger"
                     onClick={() =>
-                      startTransition(async () => {
-                        await deleteExpense(item.id);
-                      })
+                      setConfirm({ type: "delete", expense: item })
                     }
                   >
                     <Trash2 className="h-3.5 w-3.5" />
@@ -207,6 +261,25 @@ export function ExpenseManager({ expenses }: { expenses: Expense[] }) {
           )}
         </div>
       </Card>
+
+      <ConfirmDialog
+        open={confirm !== null}
+        title={
+          confirm?.type === "delete"
+            ? "Delete expense?"
+            : "Save expense changes?"
+        }
+        description={
+          confirm?.type === "delete"
+            ? `This will permanently delete the ${formatCurrency(confirm.expense.amount)} ${confirm.expense.category} expense. This action cannot be undone.`
+            : `Update this ${editing ? formatCurrency(editing.amount) : ""} expense with the changes you made?`
+        }
+        confirmLabel={confirm?.type === "delete" ? "Delete" : "Save changes"}
+        variant={confirm?.type === "delete" ? "danger" : "primary"}
+        pending={confirm?.type === "delete" ? deletePending : updatePending}
+        onConfirm={handleConfirm}
+        onCancel={() => setConfirm(null)}
+      />
     </div>
   );
 }

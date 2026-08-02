@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { connectDB } from "@/lib/db";
 import { requireUser } from "@/lib/session";
+import { formatCurrency } from "@/lib/utils";
 import { expenseSchema } from "@/lib/validations";
 import { Budget, Expense, Notification } from "@/models";
 
@@ -32,7 +33,7 @@ async function maybeBudgetWarning(userId: string) {
     await Notification.create({
       userId,
       title: "Budget exceeded",
-      message: `You've spent $${total.toFixed(2)} of your $${budget.monthlyBudget.toFixed(2)} monthly budget.`,
+      message: `You've spent ${formatCurrency(total)} of your ${formatCurrency(budget.monthlyBudget)} monthly budget.`,
       type: "warning",
     });
   } else if (ratio >= 0.8) {
