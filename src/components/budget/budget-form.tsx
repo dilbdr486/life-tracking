@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 import { saveBudget, type ActionState } from "@/actions/budget";
 import { FormMessage } from "@/components/form-message";
 import { Button } from "@/components/ui/button";
@@ -28,8 +28,19 @@ export function BudgetForm({
     saveBudget,
     {},
   );
+  const [formKey, setFormKey] = useState(0);
+  const [cleared, setCleared] = useState(false);
+  const wasPending = useRef(false);
   const remaining = monthlyBudget - monthSpend;
   const estimatedSavings = Math.max(0, monthlyIncome - monthSpend);
+
+  useEffect(() => {
+    if (wasPending.current && !pending && state.success) {
+      setCleared(true);
+      setFormKey((key) => key + 1);
+    }
+    wasPending.current = pending;
+  }, [pending, state.success]);
 
   return (
     <div className="grid gap-6 xl:grid-cols-[1fr_360px]">
@@ -38,7 +49,7 @@ export function BudgetForm({
           title="Budget settings"
           description="Set income, monthly limit, and category caps"
         />
-        <form action={action} className="space-y-4">
+        <form key={formKey} action={action} className="space-y-4">
           <div className="grid gap-3 sm:grid-cols-3">
             <Input
               name="monthlyIncome"
@@ -47,7 +58,7 @@ export function BudgetForm({
               min="0"
               label="Monthly income"
               placeholder="0"
-              defaultValue={monthlyIncome || ""}
+              defaultValue={cleared ? "" : monthlyIncome || ""}
             />
             <Input
               name="monthlyBudget"
@@ -56,7 +67,7 @@ export function BudgetForm({
               min="0"
               label="Monthly budget"
               placeholder="0"
-              defaultValue={monthlyBudget || ""}
+              defaultValue={cleared ? "" : monthlyBudget || ""}
             />
             <Input
               name="savingsGoal"
@@ -65,7 +76,7 @@ export function BudgetForm({
               min="0"
               label="Savings goal"
               placeholder="0"
-              defaultValue={savingsGoal || ""}
+              defaultValue={cleared ? "" : savingsGoal || ""}
             />
           </div>
 
@@ -83,7 +94,9 @@ export function BudgetForm({
                   min="0"
                   label={category}
                   placeholder="0"
-                  defaultValue={categoryBudgets[category] || ""}
+                  defaultValue={
+                    cleared ? "" : categoryBudgets[category] || ""
+                  }
                 />
               ))}
             </div>
