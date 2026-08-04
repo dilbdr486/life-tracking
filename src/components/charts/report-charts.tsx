@@ -21,8 +21,9 @@ import { formatCurrency } from "@/lib/utils";
 
 type Slice = { name: string; value: number };
 
-function currencyTooltipValue(value: number | undefined) {
-  return formatCurrency(Number(value ?? 0));
+function currencyTooltipValue(value: unknown) {
+  const amount = Array.isArray(value) ? Number(value[0] ?? 0) : Number(value ?? 0);
+  return formatCurrency(Number.isFinite(amount) ? amount : 0);
 }
 
 export function ReportCharts({
