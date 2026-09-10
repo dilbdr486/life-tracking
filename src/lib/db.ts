@@ -6,7 +6,6 @@ const MONGODB_URI =
 type MongooseCache = {
   conn: typeof mongoose | null;
   promise: Promise<typeof mongoose> | null;
-  indexesSynced?: boolean;
 };
 
 declare global {
@@ -16,49 +15,29 @@ declare global {
 const cached: MongooseCache = global.mongooseCache ?? {
   conn: null,
   promise: null,
-  indexesSynced: false,
 };
 
 global.mongooseCache = cached;
 
-async function dropIndexIfExists(
-  collection: mongoose.mongo.Collection,
-  indexName: string,
-) {
-  try {
-    await collection.dropIndex(indexName);
-  } catch {}
-}
-
-async function syncBudgetIndexes() {
-  if (cached.indexesSynced) return;
-  const db = mongoose.connection.db;
-  if (!db) return;
-
-  await dropIndexIfExists(db.collection("budgets"), "userId_1");
-  await dropIndexIfExists(
-    db.collection("categorybudgets"),
-    "userId_1_category_1",
-  );
-
-  const { Budget, CategoryBudget } = await import("@/models");
-  await Promise.all([Budget.syncIndexes(), CategoryBudget.syncIndexes()]);
-  cached.indexesSynced = true;
-}
-
 export async function connectDB() {
-  if (cached.conn) {
-    await syncBudgetIndexes();
-    return cached.conn;
-  }
+  if (cached.conn) return cached.conn;
 
   if (!cached.promise) {
     cached.promise = mongoose.connect(MONGODB_URI, {
       bufferCommands: false,
+      maxPoolSize: 5,
+      minPoolSize: 0,
+      serverSelectionTimeoutMS: 8000,
+      socketTimeoutMS: 20000,
     });
   }
 
-  cached.conn = await cached.promise;
-  await syncBudgetIndexes();
+  try {
+    cached.conn = await cached.promise;
+  } catch (error) {
+    cached.promise = null;
+    throw error;
+  }
+
   return cached.conn;
 }
