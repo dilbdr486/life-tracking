@@ -1,26 +1,31 @@
 "use server";
 
+import mongoose from "mongoose";
 import { revalidatePath } from "next/cache";
-import { currentBudgetPeriod, periodDateRange } from "@/lib/budget-period";
-import { findBudgetForPeriod } from "@/lib/budget-queries";
+import { periodDateRange } from "@/lib/budget-period";
 import { connectDB } from "@/lib/db";
 import { requireUser } from "@/lib/session";
 import { formatCurrency } from "@/lib/utils";
 import { expenseSchema } from "@/lib/validations";
-import { Expense, Notification } from "@/models";
+import { Budget, Expense, Notification } from "@/models";
 
 export type ActionState = { error?: string; success?: string };
 
-async function maybeBudgetWarning(userId: string) {
-  const period = currentBudgetPeriod();
-  const budget = await findBudgetForPeriod(userId, period);
+async function maybeBudgetWarning(userId: string, budgetId: string) {
+  if (!mongoose.isValidObjectId(budgetId)) return;
+
+  const budget = await Budget.findOne({ _id: budgetId, userId }).lean();
   if (!budget || budget.monthlyBudget <= 0) return;
 
-  const { start, end } = periodDateRange(period);
+  const { start, end } = periodDateRange({
+    year: budget.year,
+    month: budget.month,
+  });
   const spent = await Expense.aggregate<{ total: number }>([
     {
       $match: {
         userId: budget.userId,
+        budgetId: budget._id,
         date: { $gte: start, $lte: end },
       },
     },
@@ -47,12 +52,40 @@ async function maybeBudgetWarning(userId: string) {
   }
 }
 
+async function resolveBudgetForUser(userId: string, budgetId: string) {
+  if (!mongoose.isValidObjectId(budgetId)) {
+    return { error: "Select a valid budget" as const };
+  }
+
+  const budget = await Budget.findOne({
+    _id: budgetId,
+    userId,
+    year: { $exists: true, $ne: null },
+    month: { $exists: true, $ne: null },
+  }).lean();
+
+  if (!budget) {
+    return { error: "Selected budget was not found. Create a budget first." as const };
+  }
+
+  return { budget };
+}
+
+function isDateInBudgetMonth(
+  date: Date,
+  year: number,
+  month: number,
+) {
+  return date.getFullYear() === year && date.getMonth() + 1 === month;
+}
+
 export async function createExpense(
   _prev: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
   const user = await requireUser();
   const parsed = expenseSchema.safeParse({
+    budgetId: formData.get("budgetId"),
     amount: formData.get("amount"),
     category: formData.get("category"),
     paymentMethod: formData.get("paymentMethod"),
@@ -65,16 +98,33 @@ export async function createExpense(
   }
 
   await connectDB();
+  const resolved = await resolveBudgetForUser(user.id, parsed.data.budgetId);
+  if ("error" in resolved) return { error: resolved.error };
+
+  const expenseDate = new Date(parsed.data.date);
+  if (
+    !isDateInBudgetMonth(
+      expenseDate,
+      resolved.budget.year,
+      resolved.budget.month,
+    )
+  ) {
+    return {
+      error: "Expense date must be within the selected budget month",
+    };
+  }
+
   await Expense.create({
     userId: user.id,
+    budgetId: resolved.budget._id,
     amount: parsed.data.amount,
     category: parsed.data.category,
     paymentMethod: parsed.data.paymentMethod,
-    date: new Date(parsed.data.date),
+    date: expenseDate,
     note: parsed.data.note ?? null,
   });
 
-  await maybeBudgetWarning(user.id);
+  await maybeBudgetWarning(user.id, resolved.budget._id.toString());
 
   revalidatePath("/expenses");
   revalidatePath("/dashboard");
@@ -91,6 +141,7 @@ export async function updateExpense(
 ): Promise<ActionState> {
   const user = await requireUser();
   const parsed = expenseSchema.safeParse({
+    budgetId: formData.get("budgetId"),
     amount: formData.get("amount"),
     category: formData.get("category"),
     paymentMethod: formData.get("paymentMethod"),
@@ -106,17 +157,37 @@ export async function updateExpense(
   const existing = await Expense.findOne({ _id: id, userId: user.id });
   if (!existing) return { error: "Expense not found" };
 
+  const resolved = await resolveBudgetForUser(user.id, parsed.data.budgetId);
+  if ("error" in resolved) return { error: resolved.error };
+
+  const expenseDate = new Date(parsed.data.date);
+  if (
+    !isDateInBudgetMonth(
+      expenseDate,
+      resolved.budget.year,
+      resolved.budget.month,
+    )
+  ) {
+    return {
+      error: "Expense date must be within the selected budget month",
+    };
+  }
+
+  existing.budgetId = resolved.budget._id;
   existing.amount = parsed.data.amount;
   existing.category = parsed.data.category;
   existing.paymentMethod = parsed.data.paymentMethod;
-  existing.date = new Date(parsed.data.date);
+  existing.date = expenseDate;
   existing.note = parsed.data.note ?? null;
   await existing.save();
+
+  await maybeBudgetWarning(user.id, resolved.budget._id.toString());
 
   revalidatePath("/expenses");
   revalidatePath("/dashboard");
   revalidatePath("/budget");
   revalidatePath("/reports");
+  revalidatePath("/notifications");
   return { success: "Expense updated" };
 }
 

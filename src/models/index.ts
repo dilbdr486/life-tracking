@@ -47,6 +47,12 @@ const expenseSchema = new Schema(
       required: true,
       index: true,
     },
+    budgetId: {
+      type: Schema.Types.ObjectId,
+      ref: "Budget",
+      required: true,
+      index: true,
+    },
     amount: { type: Number, required: true },
     category: { type: String, required: true },
     paymentMethod: { type: String, required: true },
@@ -57,6 +63,7 @@ const expenseSchema = new Schema(
 );
 
 expenseSchema.index({ userId: 1, date: 1 });
+expenseSchema.index({ userId: 1, budgetId: 1 });
 
 const budgetSchema = new Schema(
   {

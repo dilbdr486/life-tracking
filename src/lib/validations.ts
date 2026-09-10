@@ -40,6 +40,7 @@ export const activitySchema = z.object({
 });
 
 export const expenseSchema = z.object({
+  budgetId: z.string().min(1, "Select a budget"),
   amount: z.coerce.number().positive("Amount must be greater than 0"),
   category: z.enum(EXPENSE_CATEGORIES),
   paymentMethod: z.enum(PAYMENT_METHODS),

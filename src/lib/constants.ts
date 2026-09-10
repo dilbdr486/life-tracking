@@ -22,11 +22,8 @@ export const EXPENSE_CATEGORIES = [
 
 export const PAYMENT_METHODS = [
   "Cash",
-  "Card",
-  "UPI",
   "Bank Transfer",
-  "Wallet",
-  "Other",
+  "eSewa",
 ] as const;
 
 export const ACTIVITY_COLORS: Record<string, string> = {

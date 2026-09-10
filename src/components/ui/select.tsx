@@ -1,9 +1,11 @@
 import { cn } from "@/lib/utils";
 import type { SelectHTMLAttributes } from "react";
 
+export type SelectOption = string | { value: string; label: string };
+
 type Props = SelectHTMLAttributes<HTMLSelectElement> & {
   label?: string;
-  options: readonly string[] | string[];
+  options: readonly SelectOption[] | SelectOption[];
 };
 
 export function Select({ className, label, id, options, ...props }: Props) {
@@ -20,11 +22,16 @@ export function Select({ className, label, id, options, ...props }: Props) {
         )}
         {...props}
       >
-        {options.map((option) => (
-          <option key={option} value={option}>
-            {option}
-          </option>
-        ))}
+        {options.map((option) => {
+          const value = typeof option === "string" ? option : option.value;
+          const optionLabel =
+            typeof option === "string" ? option : option.label;
+          return (
+            <option key={value} value={value}>
+              {optionLabel}
+            </option>
+          );
+        })}
       </select>
     </label>
   );

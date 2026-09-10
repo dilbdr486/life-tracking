@@ -8,6 +8,7 @@ import {
   useState,
   useTransition,
 } from "react";
+import Link from "next/link";
 import {
   createExpense,
   deleteExpense,
@@ -28,8 +29,17 @@ import { formatCurrency, toDateInputValue } from "@/lib/utils";
 import { format } from "date-fns";
 import { Pencil, Trash2 } from "lucide-react";
 
+type BudgetOption = {
+  id: string;
+  year: number;
+  month: number;
+  label: string;
+  monthlyBudget: number;
+};
+
 type Expense = {
   id: string;
+  budgetId: string | null;
   amount: number;
   category: string;
   paymentMethod: string;
@@ -43,11 +53,30 @@ type ConfirmState =
   | { type: "delete"; expense: Expense }
   | null;
 
-export function ExpenseManager({ expenses }: { expenses: Expense[] }) {
+function defaultDateForBudget(budget: BudgetOption | undefined) {
+  if (!budget) return toDateInputValue(new Date());
+  const now = new Date();
+  if (now.getFullYear() === budget.year && now.getMonth() + 1 === budget.month) {
+    return toDateInputValue(now);
+  }
+  return toDateInputValue(new Date(budget.year, budget.month - 1, 1));
+}
+
+export function ExpenseManager({
+  expenses,
+  budgets,
+}: {
+  expenses: Expense[];
+  budgets: BudgetOption[];
+}) {
   const toast = useToast();
   const [editing, setEditing] = useState<Expense | null>(null);
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("All");
+  const [historyBudgetId, setHistoryBudgetId] = useState(
+    budgets[0]?.id ?? "",
+  );
+  const [formBudgetId, setFormBudgetId] = useState(budgets[0]?.id ?? "");
   const [confirm, setConfirm] = useState<ConfirmState>(null);
   const formRef = useRef<HTMLFormElement>(null);
   const skipConfirm = useRef(false);
@@ -73,9 +102,28 @@ export function ExpenseManager({ expenses }: { expenses: Expense[] }) {
     wasUpdatePending.current = updatePending;
   }, [updatePending, updateState.success]);
 
+  useEffect(() => {
+    if (editing?.budgetId) {
+      setFormBudgetId(editing.budgetId);
+      return;
+    }
+    if (!formBudgetId && budgets[0]) {
+      setFormBudgetId(budgets[0].id);
+    }
+  }, [editing, budgets, formBudgetId]);
+
+  const selectedFormBudget = budgets.find((item) => item.id === formBudgetId);
+  const budgetLookup = useMemo(
+    () => Object.fromEntries(budgets.map((item) => [item.id, item])),
+    [budgets],
+  );
+
   const filtered = useMemo(() => {
     return expenses.filter((item) => {
-      const matchesCategory = category === "All" || item.category === category;
+      const matchesBudget =
+        !historyBudgetId || item.budgetId === historyBudgetId;
+      const matchesCategory =
+        category === "All" || item.category === category;
       const q = search.toLowerCase();
       const matchesSearch =
         !q ||
@@ -83,12 +131,16 @@ export function ExpenseManager({ expenses }: { expenses: Expense[] }) {
         item.paymentMethod.toLowerCase().includes(q) ||
         (item.note ?? "").toLowerCase().includes(q) ||
         String(item.amount).includes(q);
-      return matchesCategory && matchesSearch;
+      return matchesBudget && matchesCategory && matchesSearch;
     });
-  }, [expenses, search, category]);
+  }, [expenses, search, category, historyBudgetId]);
 
   const { page, setPage, pageCount, pageItems, pageSize, total } =
-    usePagination(filtered, 5, `${search}-${category}-${filtered.length}`);
+    usePagination(
+      filtered,
+      5,
+      `${search}-${category}-${historyBudgetId}-${filtered.length}`,
+    );
 
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     if (skipConfirm.current) return;
@@ -141,88 +193,153 @@ export function ExpenseManager({ expenses }: { expenses: Expense[] }) {
             pending: createPending,
           };
 
+  const hasBudgets = budgets.length > 0;
+  const budgetSelectOptions = budgets.map((item) => ({
+    value: item.id,
+    label: item.label,
+  }));
+
   return (
     <div className="grid gap-6 xl:grid-cols-[360px_1fr]">
       <Card>
         <CardHeader
           title={editing ? "Edit expense" : "Add expense"}
-          description="Track every payment with category and method"
+          description="Choose a created budget, then add spending"
         />
-        <form
-          ref={formRef}
-          action={editing ? updateAction : createAction}
-          className="space-y-3"
-          key={editing?.id ?? "new"}
-          onSubmit={handleSubmit}
-        >
-          <Input
-            name="amount"
-            type="number"
-            step="0.01"
-            min="0"
-            label="Amount"
-            placeholder="25.50"
-            defaultValue={editing?.amount}
-            required
-          />
-          <Select
-            name="category"
-            label="Category"
-            options={EXPENSE_CATEGORIES}
-            defaultValue={editing?.category ?? "Food"}
-          />
-          <Select
-            name="paymentMethod"
-            label="Payment method"
-            options={PAYMENT_METHODS}
-            defaultValue={editing?.paymentMethod ?? "Card"}
-          />
-          <Input
-            name="date"
-            type="date"
-            label="Date"
-            defaultValue={
-              editing
-                ? toDateInputValue(editing.date)
-                : toDateInputValue(new Date())
-            }
-            required
-          />
-          <Textarea
-            name="note"
-            label="Notes"
-            placeholder="Optional note"
-            defaultValue={editing?.note ?? ""}
-          />
-          <div className="flex gap-2">
-            <Button type="submit" disabled={createPending || updatePending}>
-              {editing
-                ? updatePending
-                  ? "Saving..."
-                  : "Save changes"
-                : createPending
-                  ? "Adding..."
-                  : "Add expense"}
-            </Button>
-            {editing ? (
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() => setEditing(null)}
-              >
-                Cancel
-              </Button>
-            ) : null}
+        {!hasBudgets ? (
+          <div className="rounded-xl border border-dashed border-(--border) px-4 py-8 text-center">
+            <p className="text-sm text-(--muted)">
+              Create a monthly budget first before adding expenses.
+            </p>
+            <Link href="/budget" className="mt-4 inline-block">
+              <Button type="button">Go to Budget</Button>
+            </Link>
           </div>
-        </form>
+        ) : (
+          <form
+            ref={formRef}
+            action={editing ? updateAction : createAction}
+            className="space-y-3"
+            key={`${editing?.id ?? "new"}-${formBudgetId}`}
+            onSubmit={handleSubmit}
+          >
+            <Select
+              name="budgetId"
+              label="Budget"
+              options={budgetSelectOptions}
+              value={formBudgetId}
+              onChange={(event) => setFormBudgetId(event.target.value)}
+              required
+            />
+            <Input
+              name="amount"
+              type="number"
+              step="0.01"
+              min="0"
+              label="Amount"
+              placeholder="25.50"
+              defaultValue={editing?.amount}
+              required
+            />
+            <Select
+              name="category"
+              label="Category"
+              options={EXPENSE_CATEGORIES}
+              defaultValue={editing?.category ?? "Food"}
+            />
+            <Select
+              name="paymentMethod"
+              label="Payment method"
+              options={PAYMENT_METHODS}
+              defaultValue={
+                editing &&
+                PAYMENT_METHODS.includes(
+                  editing.paymentMethod as (typeof PAYMENT_METHODS)[number],
+                )
+                  ? editing.paymentMethod
+                  : "Cash"
+              }
+            />
+            <Input
+              name="date"
+              type="date"
+              label="Date"
+              min={
+                selectedFormBudget
+                  ? toDateInputValue(
+                      new Date(
+                        selectedFormBudget.year,
+                        selectedFormBudget.month - 1,
+                        1,
+                      ),
+                    )
+                  : undefined
+              }
+              max={
+                selectedFormBudget
+                  ? toDateInputValue(
+                      new Date(
+                        selectedFormBudget.year,
+                        selectedFormBudget.month,
+                        0,
+                      ),
+                    )
+                  : undefined
+              }
+              defaultValue={
+                editing
+                  ? toDateInputValue(editing.date)
+                  : defaultDateForBudget(selectedFormBudget)
+              }
+              required
+            />
+            <Textarea
+              name="note"
+              label="Notes"
+              placeholder="Optional note"
+              defaultValue={editing?.note ?? ""}
+            />
+            <div className="flex gap-2">
+              <Button type="submit" disabled={createPending || updatePending}>
+                {editing
+                  ? updatePending
+                    ? "Saving..."
+                    : "Save changes"
+                  : createPending
+                    ? "Adding..."
+                    : "Add expense"}
+              </Button>
+              {editing ? (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => setEditing(null)}
+                >
+                  Cancel
+                </Button>
+              ) : null}
+            </div>
+          </form>
+        )}
       </Card>
 
       <Card>
         <CardHeader
           title="Expense history"
-          description="Search and filter your spending"
+          description="Filtered by selected budget"
         />
-        <div className="mb-4 grid gap-3 sm:grid-cols-[1fr_180px]">
+        <div className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-[1fr_1fr_180px]">
+          <Select
+            label="Budget"
+            options={
+              hasBudgets
+                ? budgetSelectOptions
+                : [{ value: "", label: "No budgets yet" }]
+            }
+            value={historyBudgetId}
+            onChange={(event) => setHistoryBudgetId(event.target.value)}
+            disabled={!hasBudgets}
+          />
           <Input
             label="Search"
             placeholder="Search notes, category, amount..."
@@ -238,9 +355,14 @@ export function ExpenseManager({ expenses }: { expenses: Expense[] }) {
         </div>
 
         <div className="space-y-3">
-          {filtered.length === 0 ? (
+          {!hasBudgets ? (
             <p className="rounded-xl border border-dashed border-(--border) px-4 py-10 text-center text-sm text-(--muted)">
-              No expenses match your filters.
+              Create a budget to start tracking expense history.
+            </p>
+          ) : filtered.length === 0 ? (
+            <p className="rounded-xl border border-dashed border-(--border) px-4 py-10 text-center text-sm text-(--muted)">
+              No expenses for this budget
+              {category !== "All" || search ? " with current filters" : ""}.
             </p>
           ) : (
             pageItems.map((item) => (
@@ -258,11 +380,16 @@ export function ExpenseManager({ expenses }: { expenses: Expense[] }) {
                     </span>
                   </div>
                   <p className="mt-1 text-sm text-(--muted)">
+                    {item.budgetId && budgetLookup[item.budgetId]
+                      ? `${budgetLookup[item.budgetId].label} · `
+                      : ""}
                     {format(new Date(item.date), "MMM d, yyyy")} ·{" "}
                     {item.paymentMethod}
                   </p>
                   {item.note ? (
-                    <p className="mt-1 text-sm text-(--muted-2)">{item.note}</p>
+                    <p className="mt-1 text-sm text-(--muted-2)">
+                      {item.note}
+                    </p>
                   ) : null}
                 </div>
                 <div className="flex gap-2">
