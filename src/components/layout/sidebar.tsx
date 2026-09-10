@@ -8,7 +8,6 @@ import {
   ChartPie,
   LayoutDashboard,
   Receipt,
-  Settings2,
   UserRound,
   Wallet,
 } from "lucide-react";
@@ -34,9 +33,7 @@ export function Sidebar({ unread = 0 }: { unread?: number }) {
           <p className="font-display text-2xl font-semibold tracking-tight text-foreground">
             Life<span className="text-(--accent)">Flow</span>
           </p>
-          <p className="mt-1 text-xs text-(--muted)">
-            Time & money, in sync
-          </p>
+          <p className="mt-1 text-xs text-(--muted)">Time & money, in sync</p>
         </Link>
       </div>
 
@@ -65,7 +62,6 @@ export function Sidebar({ unread = 0 }: { unread?: number }) {
           );
         })}
       </nav>
-
     </aside>
   );
 }

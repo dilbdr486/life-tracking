@@ -13,13 +13,16 @@ import {
   deleteExpense,
   updateExpense,
 } from "@/actions/expenses";
-import { FormMessage } from "@/components/form-message";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader } from "@/components/ui/card";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
+import { Pagination } from "@/components/ui/pagination";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { useToast } from "@/components/ui/toast";
+import { useActionToast } from "@/hooks/use-action-toast";
+import { usePagination } from "@/hooks/use-pagination";
 import { EXPENSE_CATEGORIES, PAYMENT_METHODS } from "@/lib/constants";
 import { formatCurrency, toDateInputValue } from "@/lib/utils";
 import { format } from "date-fns";
@@ -35,17 +38,19 @@ type Expense = {
 };
 
 type ConfirmState =
+  | { type: "create" }
   | { type: "update" }
   | { type: "delete"; expense: Expense }
   | null;
 
 export function ExpenseManager({ expenses }: { expenses: Expense[] }) {
+  const toast = useToast();
   const [editing, setEditing] = useState<Expense | null>(null);
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("All");
   const [confirm, setConfirm] = useState<ConfirmState>(null);
   const formRef = useRef<HTMLFormElement>(null);
-  const skipUpdateConfirm = useRef(false);
+  const skipConfirm = useRef(false);
   const wasUpdatePending = useRef(false);
   const [createState, createAction, createPending] = useActionState(
     createExpense,
@@ -58,6 +63,9 @@ export function ExpenseManager({ expenses }: { expenses: Expense[] }) {
   );
   const [deletePending, startDeleteTransition] = useTransition();
 
+  useActionToast(createState, createPending);
+  useActionToast(updateState, updatePending);
+
   useEffect(() => {
     if (wasUpdatePending.current && !updatePending && updateState.success) {
       setEditing(null);
@@ -67,8 +75,7 @@ export function ExpenseManager({ expenses }: { expenses: Expense[] }) {
 
   const filtered = useMemo(() => {
     return expenses.filter((item) => {
-      const matchesCategory =
-        category === "All" || item.category === category;
+      const matchesCategory = category === "All" || item.category === category;
       const q = search.toLowerCase();
       const matchesSearch =
         !q ||
@@ -80,31 +87,59 @@ export function ExpenseManager({ expenses }: { expenses: Expense[] }) {
     });
   }, [expenses, search, category]);
 
+  const { page, setPage, pageCount, pageItems, pageSize, total } =
+    usePagination(filtered, 5, `${search}-${category}-${filtered.length}`);
+
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
-    if (editing && !skipUpdateConfirm.current) {
-      event.preventDefault();
-      setConfirm({ type: "update" });
-      return;
-    }
+    if (skipConfirm.current) return;
+    event.preventDefault();
+    setConfirm({ type: editing ? "update" : "create" });
   }
 
   function handleConfirm() {
     if (!confirm) return;
 
-    if (confirm.type === "update") {
-      skipUpdateConfirm.current = true;
+    if (confirm.type === "create" || confirm.type === "update") {
+      skipConfirm.current = true;
       setConfirm(null);
       formRef.current?.requestSubmit();
-      skipUpdateConfirm.current = false;
+      skipConfirm.current = false;
       return;
     }
 
     const id = confirm.expense.id;
     startDeleteTransition(async () => {
-      await deleteExpense(id);
+      const result = await deleteExpense(id);
       setConfirm(null);
+      if (result.error) toast.error(result.error);
+      else toast.success(result.success ?? "Expense deleted");
     });
   }
+
+  const confirmCopy =
+    confirm?.type === "delete"
+      ? {
+          title: "Delete expense?",
+          description: `This will permanently delete the ${formatCurrency(confirm.expense.amount)} ${confirm.expense.category} expense. This action cannot be undone.`,
+          confirmLabel: "Delete",
+          variant: "danger" as const,
+          pending: deletePending,
+        }
+      : confirm?.type === "update"
+        ? {
+            title: "Save expense changes?",
+            description: `Update this ${editing ? formatCurrency(editing.amount) : ""} expense with the changes you made?`,
+            confirmLabel: "Save changes",
+            variant: "primary" as const,
+            pending: updatePending,
+          }
+        : {
+            title: "Add expense?",
+            description: "Create this expense with the details you entered?",
+            confirmLabel: "Add expense",
+            variant: "primary" as const,
+            pending: createPending,
+          };
 
   return (
     <div className="grid gap-6 xl:grid-cols-[360px_1fr]">
@@ -159,17 +194,15 @@ export function ExpenseManager({ expenses }: { expenses: Expense[] }) {
             placeholder="Optional note"
             defaultValue={editing?.note ?? ""}
           />
-          <FormMessage
-            error={editing ? updateState.error : createState.error}
-            success={
-              editing
-                ? updateState.success
-                : createState.success ?? updateState.success
-            }
-          />
           <div className="flex gap-2">
             <Button type="submit" disabled={createPending || updatePending}>
-              {editing ? "Save changes" : "Add expense"}
+              {editing
+                ? updatePending
+                  ? "Saving..."
+                  : "Save changes"
+                : createPending
+                  ? "Adding..."
+                  : "Add expense"}
             </Button>
             {editing ? (
               <Button
@@ -210,7 +243,7 @@ export function ExpenseManager({ expenses }: { expenses: Expense[] }) {
               No expenses match your filters.
             </p>
           ) : (
-            filtered.map((item) => (
+            pageItems.map((item) => (
               <div
                 key={item.id}
                 className="flex flex-col gap-3 rounded-xl border border-(--border) bg-(--surface-2)/50 p-4 sm:flex-row sm:items-center sm:justify-between"
@@ -229,9 +262,7 @@ export function ExpenseManager({ expenses }: { expenses: Expense[] }) {
                     {item.paymentMethod}
                   </p>
                   {item.note ? (
-                    <p className="mt-1 text-sm text-(--muted-2)">
-                      {item.note}
-                    </p>
+                    <p className="mt-1 text-sm text-(--muted-2)">{item.note}</p>
                   ) : null}
                 </div>
                 <div className="flex gap-2">
@@ -259,24 +290,23 @@ export function ExpenseManager({ expenses }: { expenses: Expense[] }) {
               </div>
             ))
           )}
+          <Pagination
+            page={page}
+            pageCount={pageCount}
+            total={total}
+            pageSize={pageSize}
+            onPageChange={setPage}
+          />
         </div>
       </Card>
 
       <ConfirmDialog
         open={confirm !== null}
-        title={
-          confirm?.type === "delete"
-            ? "Delete expense?"
-            : "Save expense changes?"
-        }
-        description={
-          confirm?.type === "delete"
-            ? `This will permanently delete the ${formatCurrency(confirm.expense.amount)} ${confirm.expense.category} expense. This action cannot be undone.`
-            : `Update this ${editing ? formatCurrency(editing.amount) : ""} expense with the changes you made?`
-        }
-        confirmLabel={confirm?.type === "delete" ? "Delete" : "Save changes"}
-        variant={confirm?.type === "delete" ? "danger" : "primary"}
-        pending={confirm?.type === "delete" ? deletePending : updatePending}
+        title={confirmCopy.title}
+        description={confirmCopy.description}
+        confirmLabel={confirmCopy.confirmLabel}
+        variant={confirmCopy.variant}
+        pending={confirmCopy.pending}
         onConfirm={handleConfirm}
         onCancel={() => setConfirm(null)}
       />

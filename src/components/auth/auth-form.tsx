@@ -6,7 +6,9 @@ import type { ActionState } from "@/actions/auth";
 import { FormMessage } from "@/components/form-message";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { useActionToast } from "@/hooks/use-action-toast";
 
 export function AuthShell({
   title,
@@ -34,10 +36,7 @@ export function AuthShell({
 
       <div className="relative mx-auto flex min-h-screen max-w-md flex-col justify-center px-4 py-10">
         <div className="mb-6 flex items-center justify-between">
-          <Link
-            href="/"
-            className="font-display text-2xl font-semibold"
-          >
+          <Link href="/" className="font-display text-2xl font-semibold">
             Life<span className="text-(--accent)">Flow</span>
           </Link>
           <ThemeToggle />
@@ -58,12 +57,10 @@ export function AuthShell({
 export function LoginForm({
   action,
 }: {
-  action: (
-    prev: ActionState,
-    formData: FormData,
-  ) => Promise<ActionState>;
+  action: (prev: ActionState, formData: FormData) => Promise<ActionState>;
 }) {
   const [state, formAction, pending] = useActionState(action, {});
+  useActionToast(state, pending);
 
   return (
     <form action={formAction} className="space-y-3">
@@ -74,9 +71,8 @@ export function LoginForm({
         placeholder="you@example.com"
         required
       />
-      <Input
+      <PasswordInput
         name="password"
-        type="password"
         label="Password"
         placeholder="••••••••"
         required
@@ -106,12 +102,10 @@ export function LoginForm({
 export function RegisterForm({
   action,
 }: {
-  action: (
-    prev: ActionState,
-    formData: FormData,
-  ) => Promise<ActionState>;
+  action: (prev: ActionState, formData: FormData) => Promise<ActionState>;
 }) {
   const [state, formAction, pending] = useActionState(action, {});
+  useActionToast(state, pending);
 
   return (
     <form action={formAction} className="space-y-3">
@@ -123,9 +117,8 @@ export function RegisterForm({
         placeholder="you@example.com"
         required
       />
-      <Input
+      <PasswordInput
         name="password"
-        type="password"
         label="Password"
         placeholder="At least 6 characters"
         required
@@ -147,12 +140,10 @@ export function RegisterForm({
 export function ForgotPasswordForm({
   action,
 }: {
-  action: (
-    prev: ActionState,
-    formData: FormData,
-  ) => Promise<ActionState>;
+  action: (prev: ActionState, formData: FormData) => Promise<ActionState>;
 }) {
   const [state, formAction, pending] = useActionState(action, {});
+  useActionToast(state, pending);
 
   return (
     <form action={formAction} className="space-y-3">
@@ -191,20 +182,17 @@ export function ResetPasswordForm({
   action,
   token,
 }: {
-  action: (
-    prev: ActionState,
-    formData: FormData,
-  ) => Promise<ActionState>;
+  action: (prev: ActionState, formData: FormData) => Promise<ActionState>;
   token: string;
 }) {
   const [state, formAction, pending] = useActionState(action, {});
+  useActionToast(state, pending);
 
   return (
     <form action={formAction} className="space-y-3">
       <input type="hidden" name="token" value={token} />
-      <Input
+      <PasswordInput
         name="password"
-        type="password"
         label="New password"
         placeholder="At least 6 characters"
         required

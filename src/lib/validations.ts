@@ -48,6 +48,8 @@ export const expenseSchema = z.object({
 });
 
 export const budgetSchema = z.object({
+  year: z.coerce.number().int().min(2000).max(2100),
+  month: z.coerce.number().int().min(1).max(12),
   monthlyIncome: z.coerce.number().min(0),
   monthlyBudget: z.coerce.number().min(0),
   savingsGoal: z.coerce.number().min(0),

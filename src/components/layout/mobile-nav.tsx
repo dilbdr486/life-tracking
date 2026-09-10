@@ -33,9 +33,7 @@ export function MobileNav() {
                 href={href}
                 className={cn(
                   "flex flex-col items-center gap-1 rounded-xl px-1 py-2 text-[11px] font-medium",
-                  active
-                    ? "text-(--accent)"
-                    : "text-(--muted)",
+                  active ? "text-(--accent)" : "text-(--muted)",
                 )}
               >
                 <Icon className="h-4 w-4" />

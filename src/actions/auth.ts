@@ -47,8 +47,11 @@ export async function registerAction(
     password: hashed,
   });
 
+  const now = new Date();
   await Budget.create({
     userId: user._id,
+    year: now.getFullYear(),
+    month: now.getMonth() + 1,
     monthlyIncome: 0,
     monthlyBudget: 0,
     savingsGoal: 0,

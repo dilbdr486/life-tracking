@@ -1,26 +1,41 @@
 import Link from "next/link";
+import { SpendAnalytics } from "@/components/dashboard/spend-analytics";
 import { Topbar } from "@/components/layout/topbar";
 import { Card, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { auth } from "@/lib/auth";
-import { getDashboardStats } from "@/lib/stats";
+import { resolveSpendRange } from "@/lib/spend-range";
+import { getDashboardStats, getSpendAnalytics } from "@/lib/stats";
 import { formatCurrency, formatHours } from "@/lib/utils";
-import {
-  Activity,
-  Bell,
-  Clock3,
-  Plus,
-  Receipt,
-  Wallet,
-} from "lucide-react";
+import { Activity, Bell, Clock3, Plus, Receipt, Wallet } from "lucide-react";
 import { redirect } from "next/navigation";
 import { format } from "date-fns";
 
-export default async function DashboardPage() {
+type SearchParams = Promise<{
+  view?: string;
+  date?: string;
+  month?: string;
+  from?: string;
+  to?: string;
+}>;
+
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: SearchParams;
+}) {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
 
-  const stats = await getDashboardStats(session.user.id);
+  const params = await searchParams;
+  const range = resolveSpendRange(params);
+  const [stats, spend] = await Promise.all([
+    getDashboardStats(session.user.id),
+    getSpendAnalytics(session.user.id, {
+      start: range.start,
+      end: range.end,
+    }),
+  ]);
 
   return (
     <>
@@ -73,6 +88,20 @@ export default async function DashboardPage() {
             <Button variant="ghost">View notifications</Button>
           </Link>
         </div>
+
+        <SpendAnalytics
+          view={range.view}
+          label={range.label}
+          dateValue={range.dateValue}
+          monthValue={range.monthValue}
+          fromValue={range.fromValue}
+          toValue={range.toValue}
+          totalSpend={spend.totalSpend}
+          expenseCount={spend.expenseCount}
+          byCategory={spend.byCategory}
+          dailySpend={spend.dailySpend}
+          expenses={spend.expenses}
+        />
 
         <div className="grid gap-4 xl:grid-cols-2">
           <Card className="animate-rise stagger-1">
@@ -137,8 +166,7 @@ export default async function DashboardPage() {
                     <div>
                       <p className="font-medium">{item.category}</p>
                       <p className="text-sm text-(--muted)">
-                        {item.paymentMethod} ·{" "}
-                        {format(item.date, "MMM d")}
+                        {item.paymentMethod} · {format(item.date, "MMM d")}
                       </p>
                     </div>
                     <span className="text-sm font-semibold">
@@ -170,9 +198,7 @@ function Stat({
         {icon}
       </div>
       <p className="text-sm text-(--muted)">{label}</p>
-      <p className="mt-1 font-display text-2xl font-semibold">
-        {value}
-      </p>
+      <p className="mt-1 font-display text-2xl font-semibold">{value}</p>
     </Card>
   );
 }

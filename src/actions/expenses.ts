@@ -1,21 +1,22 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { currentBudgetPeriod, periodDateRange } from "@/lib/budget-period";
+import { findBudgetForPeriod } from "@/lib/budget-queries";
 import { connectDB } from "@/lib/db";
 import { requireUser } from "@/lib/session";
 import { formatCurrency } from "@/lib/utils";
 import { expenseSchema } from "@/lib/validations";
-import { Budget, Expense, Notification } from "@/models";
+import { Expense, Notification } from "@/models";
 
 export type ActionState = { error?: string; success?: string };
 
 async function maybeBudgetWarning(userId: string) {
-  const budget = await Budget.findOne({ userId }).lean();
+  const period = currentBudgetPeriod();
+  const budget = await findBudgetForPeriod(userId, period);
   if (!budget || budget.monthlyBudget <= 0) return;
 
-  const now = new Date();
-  const start = new Date(now.getFullYear(), now.getMonth(), 1);
-  const end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+  const { start, end } = periodDateRange(period);
   const spent = await Expense.aggregate<{ total: number }>([
     {
       $match: {

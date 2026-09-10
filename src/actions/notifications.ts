@@ -2,10 +2,12 @@
 
 import mongoose from "mongoose";
 import { revalidatePath } from "next/cache";
+import { currentBudgetPeriod, periodDateRange } from "@/lib/budget-period";
+import { findBudgetForPeriod } from "@/lib/budget-queries";
 import { connectDB } from "@/lib/db";
 import { requireUser } from "@/lib/session";
 import { formatCurrency } from "@/lib/utils";
-import { Activity, Budget, Expense, Notification } from "@/models";
+import { Activity, Expense, Notification } from "@/models";
 
 export async function markNotificationRead(id: string) {
   const user = await requireUser();
@@ -74,9 +76,12 @@ export async function createDailyReminders() {
     );
   }
 
-  const budget = await Budget.findOne({ userId: userObjectId }).lean();
+  const budget = await findBudgetForPeriod(
+    userObjectId,
+    currentBudgetPeriod(today),
+  );
   if (budget && budget.savingsGoal > 0) {
-    const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+    const { start: monthStart } = periodDateRange(currentBudgetPeriod(today));
     const spent = await Expense.aggregate<{ total: number }>([
       {
         $match: {

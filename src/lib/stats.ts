@@ -7,10 +7,13 @@ import {
   startOfMonth,
   startOfWeek,
   subDays,
+  differenceInCalendarDays,
 } from "date-fns";
 import mongoose from "mongoose";
+import { currentBudgetPeriod } from "@/lib/budget-period";
+import { findBudgetForPeriod } from "@/lib/budget-queries";
 import { connectDB } from "@/lib/db";
-import { Activity, Budget, Expense, Notification } from "@/models";
+import { Activity, Expense, Notification } from "@/models";
 
 export async function getDashboardStats(userId: string) {
   await connectDB();
@@ -21,6 +24,7 @@ export async function getDashboardStats(userId: string) {
   tomorrow.setDate(tomorrow.getDate() + 1);
   const monthStart = startOfMonth(now);
   const monthEnd = endOfMonth(now);
+  const period = currentBudgetPeriod(now);
 
   const [todayActivities, todayExpenses, monthSpendAgg, budget, unread] =
     await Promise.all([
@@ -45,7 +49,7 @@ export async function getDashboardStats(userId: string) {
         },
         { $group: { _id: null, total: { $sum: "$amount" } } },
       ]),
-      Budget.findOne({ userId: userObjectId }).lean(),
+      findBudgetForPeriod(userObjectId, period),
       Notification.countDocuments({ userId: userObjectId, read: false }),
     ]);
 
@@ -83,6 +87,74 @@ export async function getDashboardStats(userId: string) {
     savingsGoal: budget?.savingsGoal ?? 0,
     unread,
     dateLabel: format(now, "EEEE, MMMM d, yyyy"),
+  };
+}
+
+export type SpendAnalyticsRange = {
+  start: Date;
+  end: Date;
+};
+
+export async function getSpendAnalytics(
+  userId: string,
+  range: SpendAnalyticsRange,
+) {
+  await connectDB();
+  const userObjectId = new mongoose.Types.ObjectId(userId);
+  const start = startOfDay(range.start);
+  const end = new Date(range.end);
+  end.setHours(23, 59, 59, 999);
+
+  const expenses = await Expense.find({
+    userId: userObjectId,
+    date: { $gte: start, $lte: end },
+  })
+    .sort({ date: -1, createdAt: -1 })
+    .lean();
+
+  const byCategory: Record<string, number> = {};
+  const dailySpend: Record<string, number> = {};
+  let totalSpend = 0;
+  const dayCount = differenceInCalendarDays(end, start) + 1;
+  const seedAllDays = dayCount > 0 && dayCount <= 62;
+
+  if (seedAllDays) {
+    for (const day of eachDayOfInterval({ start, end })) {
+      dailySpend[format(day, "MMM d")] = 0;
+    }
+  }
+
+  for (const expense of expenses) {
+    totalSpend += expense.amount;
+    byCategory[expense.category] =
+      (byCategory[expense.category] ?? 0) + expense.amount;
+    const key = format(expense.date, "MMM d");
+    dailySpend[key] = (dailySpend[key] ?? 0) + expense.amount;
+  }
+
+  return {
+    totalSpend: Number(totalSpend.toFixed(2)),
+    expenseCount: expenses.length,
+    byCategory: Object.entries(byCategory)
+      .map(([name, value]) => ({
+        name,
+        value: Number(value.toFixed(2)),
+      }))
+      .sort((a, b) => b.value - a.value),
+    dailySpend: Object.entries(dailySpend).map(([name, value]) => ({
+      name,
+      value: Number(value.toFixed(2)),
+    })),
+    expenses: expenses.map((item) => ({
+      id: item._id.toString(),
+      amount: item.amount,
+      category: item.category,
+      paymentMethod: item.paymentMethod,
+      note: item.note ?? null,
+      date: item.date.toISOString(),
+    })),
+    start: start.toISOString(),
+    end: end.toISOString(),
   };
 }
 
@@ -162,9 +234,7 @@ export async function getReportData(userId: string) {
       value: Number(value.toFixed(1)),
     })),
     weekHours: Number(
-      (
-        weekActivities.reduce((sum, a) => sum + a.duration, 0) / 60
-      ).toFixed(1),
+      (weekActivities.reduce((sum, a) => sum + a.duration, 0) / 60).toFixed(1),
     ),
     weekSpend: Number(
       weekExpenses.reduce((sum, e) => sum + e.amount, 0).toFixed(2),

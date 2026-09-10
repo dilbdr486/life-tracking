@@ -22,7 +22,9 @@ import { formatCurrency } from "@/lib/utils";
 type Slice = { name: string; value: number };
 
 function currencyTooltipValue(value: unknown) {
-  const amount = Array.isArray(value) ? Number(value[0] ?? 0) : Number(value ?? 0);
+  const amount = Array.isArray(value)
+    ? Number(value[0] ?? 0)
+    : Number(value ?? 0);
   return formatCurrency(Number.isFinite(amount) ? amount : 0);
 }
 

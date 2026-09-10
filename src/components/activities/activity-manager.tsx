@@ -13,13 +13,16 @@ import {
   deleteActivity,
   updateActivity,
 } from "@/actions/activities";
-import { FormMessage } from "@/components/form-message";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader } from "@/components/ui/card";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
+import { Pagination } from "@/components/ui/pagination";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { useToast } from "@/components/ui/toast";
+import { useActionToast } from "@/hooks/use-action-toast";
+import { usePagination } from "@/hooks/use-pagination";
 import { ACTIVITY_CATEGORIES } from "@/lib/constants";
 import { formatHours, toDateInputValue } from "@/lib/utils";
 import {
@@ -45,16 +48,18 @@ type Activity = {
 };
 
 type ConfirmState =
+  | { type: "create" }
   | { type: "update" }
   | { type: "delete"; activity: Activity }
   | null;
 
 export function ActivityManager({ activities }: { activities: Activity[] }) {
+  const toast = useToast();
   const [view, setView] = useState<"daily" | "weekly" | "monthly">("daily");
   const [editing, setEditing] = useState<Activity | null>(null);
   const [confirm, setConfirm] = useState<ConfirmState>(null);
   const formRef = useRef<HTMLFormElement>(null);
-  const skipUpdateConfirm = useRef(false);
+  const skipConfirm = useRef(false);
   const wasUpdatePending = useRef(false);
   const [createState, createAction, createPending] = useActionState(
     createActivity,
@@ -66,6 +71,9 @@ export function ActivityManager({ activities }: { activities: Activity[] }) {
     {},
   );
   const [deletePending, startDeleteTransition] = useTransition();
+
+  useActionToast(createState, createPending);
+  useActionToast(updateState, updatePending);
 
   useEffect(() => {
     if (wasUpdatePending.current && !updatePending && updateState.success) {
@@ -92,31 +100,59 @@ export function ActivityManager({ activities }: { activities: Activity[] }) {
     });
   }, [activities, view]);
 
+  const { page, setPage, pageCount, pageItems, pageSize, total } =
+    usePagination(filtered, 5, `${view}-${filtered.length}`);
+
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
-    if (editing && !skipUpdateConfirm.current) {
-      event.preventDefault();
-      setConfirm({ type: "update" });
-      return;
-    }
+    if (skipConfirm.current) return;
+    event.preventDefault();
+    setConfirm({ type: editing ? "update" : "create" });
   }
 
   function handleConfirm() {
     if (!confirm) return;
 
-    if (confirm.type === "update") {
-      skipUpdateConfirm.current = true;
+    if (confirm.type === "create" || confirm.type === "update") {
+      skipConfirm.current = true;
       setConfirm(null);
       formRef.current?.requestSubmit();
-      skipUpdateConfirm.current = false;
+      skipConfirm.current = false;
       return;
     }
 
     const id = confirm.activity.id;
     startDeleteTransition(async () => {
-      await deleteActivity(id);
+      const result = await deleteActivity(id);
       setConfirm(null);
+      if (result.error) toast.error(result.error);
+      else toast.success(result.success ?? "Activity deleted");
     });
   }
+
+  const confirmCopy =
+    confirm?.type === "delete"
+      ? {
+          title: "Delete activity?",
+          description: `This will permanently delete “${confirm.activity.title}”. This action cannot be undone.`,
+          confirmLabel: "Delete",
+          variant: "danger" as const,
+          pending: deletePending,
+        }
+      : confirm?.type === "update"
+        ? {
+            title: "Save activity changes?",
+            description: `Update “${editing?.title ?? "this activity"}” with the changes you made?`,
+            confirmLabel: "Save changes",
+            variant: "primary" as const,
+            pending: updatePending,
+          }
+        : {
+            title: "Add activity?",
+            description: "Create this activity with the details you entered?",
+            confirmLabel: "Add activity",
+            variant: "primary" as const,
+            pending: createPending,
+          };
 
   return (
     <div className="grid gap-6 xl:grid-cols-[360px_1fr]">
@@ -178,17 +214,15 @@ export function ActivityManager({ activities }: { activities: Activity[] }) {
             placeholder="Optional notes"
             defaultValue={editing?.notes ?? ""}
           />
-          <FormMessage
-            error={editing ? updateState.error : createState.error}
-            success={
-              editing
-                ? updateState.success
-                : createState.success ?? updateState.success
-            }
-          />
           <div className="flex gap-2">
             <Button type="submit" disabled={createPending || updatePending}>
-              {editing ? "Save changes" : "Add activity"}
+              {editing
+                ? updatePending
+                  ? "Saving..."
+                  : "Save changes"
+                : createPending
+                  ? "Adding..."
+                  : "Add activity"}
             </Button>
             {editing ? (
               <Button
@@ -233,7 +267,7 @@ export function ActivityManager({ activities }: { activities: Activity[] }) {
               No activities in this view yet.
             </p>
           ) : (
-            filtered.map((item) => (
+            pageItems.map((item) => (
               <div
                 key={item.id}
                 className="flex flex-col gap-3 rounded-xl border border-(--border) bg-(--surface-2)/50 p-4 sm:flex-row sm:items-center sm:justify-between"
@@ -281,24 +315,23 @@ export function ActivityManager({ activities }: { activities: Activity[] }) {
               </div>
             ))
           )}
+          <Pagination
+            page={page}
+            pageCount={pageCount}
+            total={total}
+            pageSize={pageSize}
+            onPageChange={setPage}
+          />
         </div>
       </Card>
 
       <ConfirmDialog
         open={confirm !== null}
-        title={
-          confirm?.type === "delete"
-            ? "Delete activity?"
-            : "Save activity changes?"
-        }
-        description={
-          confirm?.type === "delete"
-            ? `This will permanently delete “${confirm.activity.title}”. This action cannot be undone.`
-            : `Update “${editing?.title ?? "this activity"}” with the changes you made?`
-        }
-        confirmLabel={confirm?.type === "delete" ? "Delete" : "Save changes"}
-        variant={confirm?.type === "delete" ? "danger" : "primary"}
-        pending={confirm?.type === "delete" ? deletePending : updatePending}
+        title={confirmCopy.title}
+        description={confirmCopy.description}
+        confirmLabel={confirmCopy.confirmLabel}
+        variant={confirmCopy.variant}
+        pending={confirmCopy.pending}
         onConfirm={handleConfirm}
         onCancel={() => setConfirm(null)}
       />

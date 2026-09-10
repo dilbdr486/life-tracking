@@ -20,7 +20,12 @@ const userSchema = new Schema(
 
 const activitySchema = new Schema(
   {
-    userId: { type: Schema.Types.ObjectId, ref: "User", required: true, index: true },
+    userId: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+      index: true,
+    },
     title: { type: String, required: true, trim: true },
     category: { type: String, required: true },
     date: { type: Date, required: true, index: true },
@@ -36,7 +41,12 @@ activitySchema.index({ userId: 1, date: 1 });
 
 const expenseSchema = new Schema(
   {
-    userId: { type: Schema.Types.ObjectId, ref: "User", required: true, index: true },
+    userId: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+      index: true,
+    },
     amount: { type: Number, required: true },
     category: { type: String, required: true },
     paymentMethod: { type: String, required: true },
@@ -54,8 +64,10 @@ const budgetSchema = new Schema(
       type: Schema.Types.ObjectId,
       ref: "User",
       required: true,
-      unique: true,
+      index: true,
     },
+    year: { type: Number, required: true },
+    month: { type: Number, required: true, min: 1, max: 12 },
     monthlyIncome: { type: Number, default: 0 },
     monthlyBudget: { type: Number, default: 0 },
     savingsGoal: { type: Number, default: 0 },
@@ -63,20 +75,31 @@ const budgetSchema = new Schema(
   { timestamps: true },
 );
 
+budgetSchema.index({ userId: 1, year: 1, month: 1 }, { unique: true });
+
 const categoryBudgetSchema = new Schema(
   {
     userId: { type: Schema.Types.ObjectId, ref: "User", required: true },
+    year: { type: Number, required: true },
+    month: { type: Number, required: true, min: 1, max: 12 },
     category: { type: String, required: true },
     amount: { type: Number, default: 0 },
   },
   { timestamps: true },
 );
 
-categoryBudgetSchema.index({ userId: 1, category: 1 }, { unique: true });
-
+categoryBudgetSchema.index(
+  { userId: 1, year: 1, month: 1, category: 1 },
+  { unique: true },
+);
 const goalSchema = new Schema(
   {
-    userId: { type: Schema.Types.ObjectId, ref: "User", required: true, index: true },
+    userId: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+      index: true,
+    },
     title: { type: String, required: true },
     target: { type: Number, required: true },
     currentProgress: { type: Number, default: 0 },
@@ -88,7 +111,12 @@ const goalSchema = new Schema(
 
 const notificationSchema = new Schema(
   {
-    userId: { type: Schema.Types.ObjectId, ref: "User", required: true, index: true },
+    userId: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+      index: true,
+    },
     title: { type: String, required: true },
     message: { type: String, required: true },
     type: { type: String, required: true },

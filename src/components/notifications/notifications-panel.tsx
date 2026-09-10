@@ -86,9 +86,7 @@ export function NotificationsPanel({
                       {item.type}
                     </span>
                   </div>
-                  <p className="mt-1 text-sm text-(--muted)">
-                    {item.message}
-                  </p>
+                  <p className="mt-1 text-sm text-(--muted)">{item.message}</p>
                   <p className="mt-2 text-xs text-(--muted-2)">
                     {formatDistanceToNow(new Date(item.createdAt), {
                       addSuffix: true,
