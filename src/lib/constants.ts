@@ -13,18 +13,17 @@ export const EXPENSE_CATEGORIES = [
   "Food",
   "Transport",
   "Shopping",
+  "Rent",
   "Bills",
+  "Futsal",
+  "Breakfast",
   "Entertainment",
   "Health",
   "Education",
   "Other",
 ] as const;
 
-export const PAYMENT_METHODS = [
-  "Cash",
-  "Bank Transfer",
-  "eSewa",
-] as const;
+export const PAYMENT_METHODS = ["Cash", "Bank Transfer", "eSewa"] as const;
 
 export const ACTIVITY_COLORS: Record<string, string> = {
   Study: "#0d9488",
@@ -41,7 +40,10 @@ export const EXPENSE_COLORS: Record<string, string> = {
   Food: "#f97316",
   Transport: "#0ea5e9",
   Shopping: "#a855f7",
-  Bills: "#ef4444",
+  Rent: "#ef4444",
+  Bills: "#dc2626",
+  Futsal: "#14b8a6",
+  Breakfast: "#f59e0b",
   Entertainment: "#eab308",
   Health: "#22c55e",
   Education: "#3b82f6",

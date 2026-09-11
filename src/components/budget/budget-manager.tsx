@@ -1,6 +1,6 @@
 "use client";
 
-import { Pencil, Plus, X } from "lucide-react";
+import { ChevronDown, ChevronUp, Pencil, Plus, X } from "lucide-react";
 import { useActionState, useEffect, useRef, useState } from "react";
 import { saveBudget, type ActionState } from "@/actions/budget";
 import { FormMessage } from "@/components/form-message";
@@ -16,7 +16,7 @@ import {
   formatBudgetPeriod,
   periodToInputValue,
 } from "@/lib/budget-period";
-import { EXPENSE_CATEGORIES } from "@/lib/constants";
+import { EXPENSE_CATEGORIES, EXPENSE_COLORS } from "@/lib/constants";
 import { formatCurrency } from "@/lib/utils";
 
 export type BudgetListItem = {
@@ -97,61 +97,13 @@ export function BudgetManager({ budgets }: { budgets: BudgetListItem[] }) {
       ) : (
         <>
           <ul className="space-y-3">
-            {pageItems.map((budget) => {
-              const remaining = budget.monthlyBudget - budget.monthSpend;
-              const pct =
-                budget.monthlyBudget > 0
-                  ? Math.min(
-                      100,
-                      (budget.monthSpend / budget.monthlyBudget) * 100,
-                    )
-                  : 0;
-
-              return (
-                <li
-                  key={budget.id}
-                  className="rounded-xl border border-(--border) px-4 py-3"
-                >
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <h3 className="font-semibold">
-                        {formatBudgetPeriod(budget)}
-                      </h3>
-                      <p className="mt-1 text-sm text-(--muted)">
-                        Income {formatCurrency(budget.monthlyIncome)} · Limit{" "}
-                        {formatCurrency(budget.monthlyBudget)} · Savings goal{" "}
-                        {formatCurrency(budget.savingsGoal)}
-                      </p>
-                    </div>
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => setView({ mode: "edit", budget })}
-                    >
-                      <Pencil className="h-3.5 w-3.5" />
-                      Edit
-                    </Button>
-                  </div>
-
-                  <div className="mt-3 grid gap-2 sm:grid-cols-3">
-                    <Stat
-                      label="Spent"
-                      value={formatCurrency(budget.monthSpend)}
-                    />
-                    <Stat label="Remaining" value={formatCurrency(remaining)} />
-                    <Stat label="Used" value={`${pct.toFixed(0)}%`} />
-                  </div>
-
-                  <div className="mt-3 h-2 overflow-hidden rounded-full bg-(--surface-2)">
-                    <div
-                      className="h-full rounded-full bg-(--accent)"
-                      style={{ width: `${pct}%` }}
-                    />
-                  </div>
-                </li>
-              );
-            })}
+            {pageItems.map((budget) => (
+              <BudgetListRow
+                key={budget.id}
+                budget={budget}
+                onEdit={() => setView({ mode: "edit", budget })}
+              />
+            ))}
           </ul>
           <Pagination
             page={page}
@@ -163,6 +115,108 @@ export function BudgetManager({ budgets }: { budgets: BudgetListItem[] }) {
         </>
       )}
     </Card>
+  );
+}
+
+function BudgetListRow({
+  budget,
+  onEdit,
+}: {
+  budget: BudgetListItem;
+  onEdit: () => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const remaining = budget.monthlyBudget - budget.monthSpend;
+  const pct =
+    budget.monthlyBudget > 0
+      ? Math.min(100, (budget.monthSpend / budget.monthlyBudget) * 100)
+      : 0;
+
+  return (
+    <li className="rounded-xl border border-(--border) px-4 py-3">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 className="font-semibold">{formatBudgetPeriod(budget)}</h3>
+          <p className="mt-1 text-sm text-(--muted)">
+            Income {formatCurrency(budget.monthlyIncome)} · Limit{" "}
+            {formatCurrency(budget.monthlyBudget)} · Savings goal{" "}
+            {formatCurrency(budget.savingsGoal)}
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            onClick={() => setExpanded((value) => !value)}
+          >
+            {expanded ? (
+              <ChevronUp className="h-3.5 w-3.5" />
+            ) : (
+              <ChevronDown className="h-3.5 w-3.5" />
+            )}
+            {expanded ? "Collapse" : "Expand"}
+          </Button>
+          <Button type="button" variant="secondary" size="sm" onClick={onEdit}>
+            <Pencil className="h-3.5 w-3.5" />
+            Edit
+          </Button>
+        </div>
+      </div>
+
+      <div className="mt-3 grid gap-2 sm:grid-cols-3">
+        <Stat label="Spent" value={formatCurrency(budget.monthSpend)} />
+        <Stat label="Remaining" value={formatCurrency(remaining)} />
+        <Stat label="Used" value={`${pct.toFixed(0)}%`} />
+      </div>
+
+      <div className="mt-3 h-2 overflow-hidden rounded-full bg-(--surface-2)">
+        <div
+          className="h-full rounded-full bg-(--accent)"
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+
+      {expanded ? (
+        <div className="mt-4 border-t border-(--border) pt-4">
+          <h4 className="mb-3 text-sm font-medium text-(--muted)">
+            Money used by category
+          </h4>
+          <div className="space-y-3">
+            {EXPENSE_CATEGORIES.map((category) => {
+              const limit = budget.categoryBudgets[category] ?? 0;
+              const spent = budget.spentByCategory[category] ?? 0;
+              const categoryPct =
+                limit > 0
+                  ? Math.min(100, (spent / limit) * 100)
+                  : spent > 0
+                    ? 100
+                    : 0;
+              return (
+                <div key={category}>
+                  <div className="mb-1 flex justify-between text-xs">
+                    <span>{category}</span>
+                    <span className="text-(--muted)">
+                      Used {formatCurrency(spent)}
+                      {limit > 0 ? ` / ${formatCurrency(limit)}` : ""}
+                    </span>
+                  </div>
+                  <div className="h-1.5 overflow-hidden rounded-full bg-(--surface-2)">
+                    <div
+                      className="h-full rounded-full"
+                      style={{
+                        width: `${categoryPct}%`,
+                        backgroundColor: EXPENSE_COLORS[category] ?? "#64748b",
+                      }}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
+    </li>
   );
 }
 
@@ -387,19 +441,28 @@ function BudgetEditor({
                 const limit = categoryBudgets[category] ?? 0;
                 const spent = spentByCategory[category] ?? 0;
                 const progress =
-                  limit > 0 ? Math.min(100, (spent / limit) * 100) : 0;
+                  limit > 0
+                    ? Math.min(100, (spent / limit) * 100)
+                    : spent > 0
+                      ? 100
+                      : 0;
                 return (
                   <div key={category}>
                     <div className="mb-1 flex justify-between text-xs">
                       <span>{category}</span>
                       <span className="text-(--muted)">
-                        {formatCurrency(spent)} / {formatCurrency(limit)}
+                        Used {formatCurrency(spent)}
+                        {limit > 0 ? ` / ${formatCurrency(limit)}` : ""}
                       </span>
                     </div>
                     <div className="h-2 overflow-hidden rounded-full bg-(--surface-2)">
                       <div
-                        className="h-full rounded-full bg-(--accent)"
-                        style={{ width: `${progress}%` }}
+                        className="h-full rounded-full"
+                        style={{
+                          width: `${progress}%`,
+                          backgroundColor:
+                            EXPENSE_COLORS[category] ?? "#64748b",
+                        }}
                       />
                     </div>
                   </div>
